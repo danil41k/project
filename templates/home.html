@@ -1,0 +1,21 @@
+{% extends "base.html" %} {% block title %}Головна{% endblock %} {% block
+content %}
+<h1 class="text-3xl font-bold mb-4 align text-center">Ласкаво просимо</h1>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+        <img
+            src="https://picsum.photos/id/6/800/600"
+            alt="Placeholder"
+            class="w-full rounded-lg shadow-md"
+        />
+    </div>
+    <div>
+        <p class="text-2xl">
+            На цьому вебсайті ви зможете замовляти електронні книги з програмування, та по роботам у вашій сфері.
+        </p>
+        <div class="fixed bottom-1 right-4">
+            <a href="{{ url_for('shop.orders') }}" class="inline-flex items-center justify-center bg-indigo-600 text-white px-4 py-3 rounded-full shadow-lg hover:bg-indigo-700">Мої замовлення</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
