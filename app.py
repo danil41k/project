@@ -1,5 +1,7 @@
 import os
 from flask import Flask, render_template, session
+from flask_cors import CORS
+from flasgger import Swagger
 from models import init_db
 from routes.feedback import feedback_bp
 from routes.admin import admin_bp
@@ -9,7 +11,10 @@ from routes.api import api_bp
 app = Flask(__name__)
 app.secret_key = '1234'  # Необхідно для роботи з сесіями
 # Пароль адміністратора: можна встановити змінною оточення ADMIN_PASSWORD
-app.config['ADMIN_PASSWORD'] = os.environ.get('ADMIN_PASSWORD', 'prikol123')
+app.config['ADMIN_PASSWORD'] = os.environ.get('ADMIN_PASSWORD', 'cneltyn123')
+
+# Увімкнення CORS для API
+CORS(app)
 
 # Ініціалізація Flasgger для документації API (опціонально)
 try:
@@ -40,5 +45,10 @@ def home():
 def about():
     return render_template('about.html')
 
+@app.route('/api-demo')
+def api_demo():
+    return render_template('api_demo.html')
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='127.0.0.1', port=5000)
+    
