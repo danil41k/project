@@ -3,6 +3,10 @@ from functools import wraps
 from models import (
     get_db_connection,
     get_products,
+    get_product,
+    add_product,
+    update_product,
+    delete_product,
     get_orders,
     get_orders_by_email,
     get_order_details,
@@ -100,6 +104,139 @@ def get_all_products():
     except Exception as e:
         return error_response(f'Error retrieving products: {str(e)}', 'PRODUCT_RETRIEVAL_ERROR', 500)
 
+@api_bp.route('/products', methods=['POST'])
+@require_json('name', 'price')
+def create_product():
+    """
+    Створити новий продукт
+    ---
+    tags:
+      - Products
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - name
+            - price
+          properties:
+            name:
+              type: string
+              example: "Ноутбук Dell"
+            price:
+              type: number
+              example: 1999.99
+            image:
+              type: string
+              example: "https://example.com/laptop.jpg"
+    responses:
+      201:
+        description: Продукт успішно створено
+      400:
+        description: Відсутні обов'язкові поля
+      500:
+        description: Помилка сервера
+    """
+    try:
+        data = request.get_json()
+        name = data.get('name')
+        price = float(data.get('price'))
+        image = data.get('image', '')
+        
+        add_product(name, price, image)
+        return success_response({'name': name, 'price': price, 'image': image}, 
+                              message='Product created successfully', status_code=201)
+    except ValueError:
+        return error_response('Price must be a valid number', 'INVALID_PRICE', 400)
+    except Exception as e:
+        return error_response(f'Error creating product: {str(e)}', 'PRODUCT_CREATION_ERROR', 500)
+
+@api_bp.route('/products/<int:product_id>', methods=['PUT'])
+@require_json('name', 'price')
+def update_prod(product_id):
+    """
+    Оновити продукт
+    ---
+    tags:
+      - Products
+    parameters:
+      - name: product_id
+        in: path
+        type: integer
+        required: true
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - name
+            - price
+          properties:
+            name:
+              type: string
+            price:
+              type: number
+            image:
+              type: string
+    responses:
+      200:
+        description: Продукт успішно оновлено
+      404:
+        description: Продукт не знайдено
+      500:
+        description: Помилка сервера
+    """
+    try:
+        product = get_product(product_id)
+        if not product:
+            return error_response('Product not found', 'PRODUCT_NOT_FOUND', 404)
+        
+        data = request.get_json()
+        name = data.get('name')
+        price = float(data.get('price'))
+        image = data.get('image', '')
+        
+        update_product(product_id, name, price, image)
+        return success_response({'id': product_id, 'name': name, 'price': price, 'image': image},
+                              message='Product updated successfully')
+    except ValueError:
+        return error_response('Price must be a valid number', 'INVALID_PRICE', 400)
+    except Exception as e:
+        return error_response(f'Error updating product: {str(e)}', 'PRODUCT_UPDATE_ERROR', 500)
+
+@api_bp.route('/products/<int:product_id>', methods=['DELETE'])
+def delete_prod(product_id):
+    """
+    Видалити продукт
+    ---
+    tags:
+      - Products
+    parameters:
+      - name: product_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Продукт успішно видалено
+      404:
+        description: Продукт не знайдено
+      500:
+        description: Помилка сервера
+    """
+    try:
+        product = get_product(product_id)
+        if not product:
+            return error_response('Product not found', 'PRODUCT_NOT_FOUND', 404)
+        
+        delete_product(product_id)
+        return success_response({'id': product_id}, message='Product deleted successfully')
+    except Exception as e:
+        return error_response(f'Error deleting product: {str(e)}', 'PRODUCT_DELETE_ERROR', 500)
+
 # Orders endpoints
 @api_bp.route('/orders', methods=['GET'])
 def get_all_orders():
@@ -163,7 +300,7 @@ def get_order(order_id):
         return error_response(str(e), 'ORDER_RETRIEVAL_ERROR', 500)
 
 @api_bp.route('/orders', methods=['POST'])
-@require_json('email', 'address', 'cart')
+@require_json('email', 'address')
 def create_order():
     """
     Створити нове замовлення
@@ -179,7 +316,6 @@ def create_order():
           required:
             - email
             - address
-            - cart
           properties:
             email:
               type: string
@@ -192,6 +328,10 @@ def create_order():
               example: "+380123456789"
             cart:
               type: object
+              example: {}
+            total_price:
+              type: number
+              example: 0
     responses:
       201:
         description: Замовлення успішно створено
@@ -203,7 +343,8 @@ def create_order():
     try:
         data = request.get_json()
         phone = data.get('phone', '')
-        order_id = add_order(data['email'], data['address'], data['cart'], phone)
+        cart = data.get('cart', {})
+        order_id = add_order(data['email'], data['address'], cart, phone)
         return success_response({
             'order_id': order_id,
             'message': 'Order created successfully'
