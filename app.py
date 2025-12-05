@@ -1,7 +1,6 @@
 import os
-from flask import Flask, render_template, session
+from flask import Flask, render_template, session, request, redirect, url_for
 from flask_cors import CORS
-from flasgger import Swagger
 from models import init_db
 from routes.feedback import feedback_bp
 from routes.admin import admin_bp
@@ -11,10 +10,21 @@ from routes.api import api_bp
 app = Flask(__name__)
 app.secret_key = '1234'  # Необхідно для роботи з сесіями
 # Пароль адміністратора: можна встановити змінною оточення ADMIN_PASSWORD
-app.config['ADMIN_PASSWORD'] = os.environ.get('ADMIN_PASSWORD', 'cneltyn123')
+app.config['ADMIN_PASSWORD'] = os.environ.get('ADMIN_PASSWORD', '123')
+# Пароль для доступу до API-Demo (можна задати змінною оточення)
+app.config['API_DEMO_PASSWORD'] = os.environ.get('API_DEMO_PASSWORD', '123')
 
-# Увімкнення CORS для API
-CORS(app)
+# ============================================
+# НАЛАШТУВАННЯ CORS
+# ============================================
+# Дозволяємо запити з фронтенду
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:3000", "http://localhost:5000", "http://127.0.0.1:5000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Ініціалізація Flasgger для документації API (опціонально)
 try:
@@ -47,8 +57,32 @@ def about():
 
 @app.route('/api-demo')
 def api_demo():
-    return render_template('api_demo.html')
+    # Захищена сторінка: показати лише якщо пройшли аутентифікацію
+    if session.get('api_demo_authenticated'):
+        return render_template('api_demo.html')
+    return redirect(url_for('api_demo_login'))
+
+
+@app.route('/api-demo/login', methods=['GET', 'POST'])
+def api_demo_login():
+    error = None
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        if password and password == app.config.get('API_DEMO_PASSWORD'):
+            session['api_demo_authenticated'] = True
+            return redirect(url_for('api_demo'))
+        error = 'Невірний пароль'
+    return render_template('api_demo_login.html', error=error)
+
+
+@app.route('/api-demo/logout')
+def api_demo_logout():
+    session.pop('api_demo_authenticated', None)
+    return redirect(url_for('home'))
 
 if __name__ == '__main__':
-    app.run(debug=True, host='127.0.0.1', port=5000)
-    
+    # Bind to 0.0.0.0 so the dev server is reachable from other devices on the LAN.
+    # Allow overriding host/port via environment variables for flexibility.
+    host = os.environ.get('HOST', '0.0.0.0')
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host=host, port=port, debug=True)
