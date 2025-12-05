@@ -9,6 +9,11 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     conn.execute('CREATE TABLE IF NOT EXISTS feedback (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT, message TEXT)')
+    # Add feedback_type column (developer or general) if it doesn't exist
+    try:
+        conn.execute('ALTER TABLE feedback ADD COLUMN feedback_type TEXT DEFAULT "general"')
+    except Exception:
+        pass
     conn.execute('CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, price REAL, image TEXT)')
     conn.execute('CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, address TEXT, total_price REAL, status TEXT, date TEXT)')
     # Ensure orders table has phone column for contact updates
@@ -43,23 +48,25 @@ def get_products(q=None, min_price=None, max_price=None, has_image=None):
         params.append(f'%{q}%')
     if min_price is not None:
         try:
+            min_price_float = float(min_price)
             clauses.append('price >= ?')
-            params.append(float(min_price))
+            params.append(min_price_float)
         except (ValueError, TypeError):
             pass
     if max_price is not None:
         try:
+            max_price_float = float(max_price)
             clauses.append('price <= ?')
-            params.append(float(max_price))
+            params.append(max_price_float)
         except (ValueError, TypeError):
             pass
     if has_image is True:
-        clauses.append("image IS NOT NULL AND image != ''")
+        clauses.append("(image IS NOT NULL AND image != '')")
 
     if clauses:
         query += ' WHERE ' + ' AND '.join(clauses)
     query += ' ORDER BY id'
-    products = conn.execute(query, params).fetchall()
+    products = conn.execute(query, tuple(params)).fetchall()
     conn.close()
     return products
 
@@ -122,6 +129,21 @@ def get_orders():
 def get_orders_by_email(email):
     conn = get_db_connection()
     orders = conn.execute('SELECT * FROM orders WHERE email = ? ORDER BY date DESC', (email,)).fetchall()
+    conn.close()
+    return orders
+
+
+def get_orders_matching_email(email):
+    """Return orders where email matches the provided value.
+    This does a case-insensitive partial match (LIKE) and trims the input.
+    Useful for searches from the frontend where users may enter partial or differently-cased emails.
+    """
+    conn = get_db_connection()
+    if email is None:
+        conn.close()
+        return []
+    email_search = f"%{email.strip().lower()}%"
+    orders = conn.execute('SELECT * FROM orders WHERE LOWER(email) LIKE ? ORDER BY date DESC', (email_search,)).fetchall()
     conn.close()
     return orders
 
@@ -189,3 +211,25 @@ def delete_order(order_id):
     conn.execute('DELETE FROM orders WHERE id = ?', (order_id,))
     conn.commit()
     conn.close()
+
+
+def get_feedback_by_type(feedback_type='general'):
+    """Get feedback filtered by type (general or developer)."""
+    conn = get_db_connection()
+    feedback = conn.execute('SELECT * FROM feedback WHERE feedback_type = ? ORDER BY id DESC', (feedback_type,)).fetchall()
+    conn.close()
+    return feedback
+
+
+def add_feedback(name, email, message, feedback_type='general'):
+    """Add feedback with a type indicator."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        'INSERT INTO feedback (name, email, message, feedback_type) VALUES (?, ?, ?, ?)',
+        (name, email, message, feedback_type)
+    )
+    conn.commit()
+    feedback_id = cur.lastrowid
+    conn.close()
+    return feedback_id
