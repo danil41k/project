@@ -8,11 +8,14 @@ from models import (
     update_product,
     delete_product,
     get_orders,
-    get_orders_by_email,
+  get_orders_by_email,
+  get_orders_matching_email,
     get_order_details,
     add_order,
     update_order_status,
-    delete_order
+    delete_order,
+    get_feedback_by_type,
+    add_feedback
 )
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -267,6 +270,38 @@ def get_all_orders():
     except Exception as e:
         return error_response(str(e), 'ORDER_RETRIEVAL_ERROR', 500)
 
+
+@api_bp.route('/orders/search', methods=['GET'])
+def search_orders_by_email():
+    """
+    Пошук замовлень за email (частковий, нечутливий до регістру)
+    ---
+    tags:
+      - Orders
+    parameters:
+      - name: email
+        in: query
+        type: string
+        required: true
+        description: Email або його частина для пошуку
+    responses:
+      200:
+        description: Список замовлень
+      400:
+        description: Не вказано email
+      500:
+        description: Помилка сервера
+    """
+    try:
+        email = request.args.get('email', '').strip()
+        if not email:
+            return error_response('Email query parameter is required', 'MISSING_EMAIL', 400)
+        # Use the models helper for case-insensitive partial matches
+        orders = get_orders_matching_email(email)
+        return success_response([dict(order) for order in orders])
+    except Exception as e:
+        return error_response(str(e), 'ORDER_SEARCH_ERROR', 500)
+
 @api_bp.route('/orders/<int:order_id>', methods=['GET'])
 def get_order(order_id):
     """
@@ -444,7 +479,7 @@ def get_all_feedback():
 @require_json('name', 'email', 'message')
 def create_feedback():
     """
-    Створити новий відгук
+    Створити новий відгук (категорія 'general')
     ---
     tags:
       - Feedback
@@ -461,37 +496,58 @@ def create_feedback():
           properties:
             name:
               type: string
-              example: "Іван Петренко"
             email:
               type: string
-              example: "ivan@example.com"
             message:
               type: string
-              example: "Дуже задоволений покупкою!"
+            feedback_type:
+              type: string
+              enum: [general, developer]
+              default: general
     responses:
       201:
         description: Відгук створено
-      400:
-        description: Не всі обов'язкові поля
       500:
         description: Помилка сервера
     """
     try:
         data = request.get_json()
-        conn = get_db_connection()
-        conn.execute(
-            'INSERT INTO feedback (name, email, message) VALUES (?, ?, ?)',
-            (data['name'], data['email'], data['message'])
-        )
-        conn.commit()
-        feedback_id = conn.lastrowid
-        conn.close()
+        feedback_type = data.get('feedback_type', 'general')
+        feedback_id = add_feedback(data['name'], data['email'], data['message'], feedback_type)
         return success_response({
             'feedback_id': feedback_id,
             'message': 'Feedback submitted successfully'
         }, status_code=201)
     except Exception as e:
         return error_response(f'Error creating feedback: {str(e)}', 'FEEDBACK_CREATION_ERROR', 500)
+
+
+@api_bp.route('/feedback/type/<feedback_type>', methods=['GET'])
+def get_feedback_by_type_endpoint(feedback_type):
+    """
+    Отримати відгуки за типом (general або developer)
+    ---
+    tags:
+      - Feedback
+    parameters:
+      - name: feedback_type
+        in: path
+        type: string
+        required: true
+        enum: [general, developer]
+    responses:
+      200:
+        description: Список відгуків
+      500:
+        description: Помилка сервера
+    """
+    try:
+        if feedback_type not in ('general', 'developer'):
+            return error_response('Invalid feedback type', 'INVALID_TYPE', 400)
+        feedback = get_feedback_by_type(feedback_type)
+        return success_response([dict(f) for f in feedback])
+    except Exception as e:
+        return error_response(str(e), 'FEEDBACK_RETRIEVAL_ERROR', 500)
 
 @api_bp.route('/feedback/<int:feedback_id>', methods=['DELETE'])
 def delete_feedback(feedback_id):

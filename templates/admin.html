@@ -110,8 +110,8 @@
         </div>
     </div>
 
-    <div>
-        <h2 class="text-2xl font-semibold mb-4 text-gray-700">Повідомлення зворотного зв'язку</h2>
+    <div class="mb-8">
+        <h2 class="text-2xl font-semibold mb-4 text-gray-700">Повідомлення розробнику</h2>
         <div class="overflow-x-auto">
             <table class="min-w-full bg-white">
                 <thead class="bg-gray-100">
@@ -123,26 +123,80 @@
                         <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дії</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-200">
-                    {% for item in feedback %}
-                    <tr class="hover:bg-gray-50">
-                        <td class="py-4 px-4 whitespace-nowrap">{{ item['id'] }}</td>
-                        <td class="py-4 px-4 whitespace-nowrap">{{ item['name'] }}</td>
-                        <td class="py-4 px-4 whitespace-nowrap">{{ item['email'] }}</td>
-                        <td class="py-4 px-4">
-                            <div class="text-sm text-gray-900 truncate max-w-xs">{{ item['message'] }}</div>
-                        </td>
-                        <td class="py-4 px-4 whitespace-nowrap text-sm font-medium">
-                            <form action="{{ url_for('admin.delete_feedback', id=item['id']) }}" method="post">
-                                <button type="submit" class="text-red-600 hover:text-red-900">Видалити</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
+                <tbody class="divide-y divide-gray-200" id="developerFeedback">
+                    <!-- populated by JS -->
+                    <tr><td colspan="5" class="text-center text-gray-500 py-4">Завантаження...</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
+
+    <div>
+        <h2 class="text-2xl font-semibold mb-4 text-gray-700">Загальні повідомлення зворотного зв'язку</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ім'я</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Повідомлення</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дії</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200" id="generalFeedback">
+                    <!-- populated by JS -->
+                    <tr><td colspan="5" class="text-center text-gray-500 py-4">Завантаження...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+    async function loadFeedback() {
+        const apiBase = '/api/v1/feedback/type';
+        const devTable = document.getElementById('developerFeedback');
+        const genTable = document.getElementById('generalFeedback');
+        
+        async function renderType(type, container) {
+            try {
+                const r = await fetch(`${apiBase}/${type}`);
+                const json = await r.json();
+                const items = (json.data && Array.isArray(json.data)) ? json.data : [];
+                if (!items.length) {
+                    container.innerHTML = '<tr><td colspan="5" class="text-center text-gray-500 py-4">Немає повідомлень</td></tr>';
+                    return;
+                }
+                container.innerHTML = '';
+                items.forEach(it => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50';
+                    const deleteUrl = `/admin/delete_feedback/${it.id}`;
+                    row.innerHTML = `
+                        <td class="py-4 px-4 whitespace-nowrap">${it.id}</td>
+                        <td class="py-4 px-4 whitespace-nowrap">${it.name || ''}</td>
+                        <td class="py-4 px-4 whitespace-nowrap">${it.email || ''}</td>
+                        <td class="py-4 px-4"><div class="text-sm text-gray-900 truncate max-w-xs">${it.message || ''}</div></td>
+                        <td class="py-4 px-4 whitespace-nowrap text-sm font-medium">
+                            <form action="${deleteUrl}" method="post" class="inline">
+                                <button type="submit" class="text-red-600 hover:text-red-900">Видалити</button>
+                            </form>
+                        </td>
+                    `;
+                    container.appendChild(row);
+                });
+            } catch (e) {
+                container.innerHTML = `<tr><td colspan="5" class="text-center text-red-600 py-4">Помилка завантаження</td></tr>`;
+                console.error(e);
+            }
+        }
+        
+        await renderType('developer', devTable);
+        await renderType('general', genTable);
+    }
+    
+    document.addEventListener('DOMContentLoaded', loadFeedback);
+    </script>
 
     <div class="mt-8">
         <h2 class="text-2xl font-semibold mb-4 text-gray-700">Клієнти</h2>
